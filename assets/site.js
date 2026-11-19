@@ -38,30 +38,41 @@ if (matchMedia('(hover:hover)').matches && !reduce) {
   $('.btn').forEach(b => { b.addEventListener('pointermove', e => { const r = b.getBoundingClientRect(); b.style.translate = `${((e.clientX - r.left) / r.width - .5) * 8}px ${((e.clientY - r.top) / r.height - .5) * 6}px`; }); b.addEventListener('pointerleave', () => b.style.translate = ''); });
 }
 
-/* ---------- silk: flowing WebGL gradient ---------- */
-const FS = `precision mediump float;uniform vec2 r;uniform float t;uniform vec3 a,b,c;uniform vec2 m;
-float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
-float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
-float fbm(vec2 p){float v=0.,s=.5;for(int i=0;i<5;i++){v+=s*n(p);p=p*2.03+vec2(1.7,9.2);s*=.5;}return v;}
-void main(){vec2 uv=gl_FragCoord.xy/r;vec2 p=uv*vec2(r.x/r.y,1.)*1.6;float tt=t*.045;
-vec2 q=vec2(fbm(p+tt),fbm(p+vec2(5.2,1.3)-tt*.7));vec2 w=vec2(fbm(p+3.5*q+vec2(1.7,9.2)+tt*.6),fbm(p+3.5*q+vec2(8.3,2.8)-tt*.4));
-float f=fbm(p+3.2*w+(m-.5)*.35);float fold=smoothstep(.25,.95,f);float sheen=pow(smoothstep(.45,.9,fbm(p*1.3+2.6*w+tt)),3.);
-vec3 col=mix(a,b,fold);col=mix(col,c,sheen*.75);col+=.05*sin(uv.y*3.+f*6.);col*=.82+.3*uv.y;gl_FragColor=vec4(col,1.);}`;
-const TONES = { hero: [[.20, .13, .11], [.56, .37, .30], [.93, .76, .66]], dark: [[.13, .10, .09], [.30, .20, .17], [.60, .42, .35]], light: [[.80, .66, .58], [.93, .84, .77], [1, .96, .92]] };
+/* ---------- dots: a field of dots that follows the pointer ---------- */
+const DOT = { hero: ['255,236,222', .17, '255,214,190'], dark: ['236,205,188', .10, '232,180,152'], light: ['122,85,70', .16, '154,102,80'] };
 $('canvas.silk').forEach(cv => {
-  const gl = cv.getContext('webgl', { antialias: false, alpha: false }); if (!gl) return;
-  const sh = (ty, src) => { const s = gl.createShader(ty); gl.shaderSource(s, src); gl.compileShader(s); return s; };
-  const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, 'attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}')); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
-  if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return; gl.useProgram(pr);
-  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  const U = n => gl.getUniformLocation(pr, n), tone = TONES[cv.dataset.tone] || TONES.hero; gl.uniform3fv(U('a'), tone[0]); gl.uniform3fv(U('b'), tone[1]); gl.uniform3fv(U('c'), tone[2]);
-  let vis = false, mx = .5, my = .5, t0 = Math.random() * 100;
-  const size = () => { const s = Math.min(devicePixelRatio, 1.5) * .6, w = cv.clientWidth * s | 0, h = cv.clientHeight * s | 0; if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; gl.viewport(0, 0, w, h); } gl.uniform2f(U('r'), cv.width, cv.height); };
+  const cx = cv.getContext('2d'); if (!cx) return;
+  const host = cv.parentElement, tone = DOT[cv.dataset.tone] || DOT.hero, big = cv.dataset.tone !== 'dark' || host.classList.contains('band');
+  let W = 0, H = 0, dpr = 1, gap = 26, vis = false, raf = 0, t0 = Math.random() * 50;
+  const P = { x: -999, y: -999, tx: -999, ty: -999, on: false, last: -9e9 }, rip = [];
+  const size = () => { dpr = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; gap = W < 700 ? 22 : 27; const w = W * dpr | 0, h = H * dpr | 0; if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; } };
+  const at = e => { const r = cv.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  host.addEventListener('pointermove', e => { const [x, y] = at(e); if (!P.on) { P.x = x; P.y = y; } P.tx = x; P.ty = y; P.on = true; P.last = performance.now(); });
+  host.addEventListener('pointerdown', e => { const [x, y] = at(e); rip.push({ x, y, t: performance.now(), k: 1 }); if (rip.length > 6) rip.shift(); });
+  host.addEventListener('pointerleave', () => { P.last = -9e9; });
   new IntersectionObserver(e => { vis = e[0].isIntersecting; if (vis) loop(); }).observe(cv);
-  cv.parentElement.addEventListener('pointermove', e => { const r = cv.getBoundingClientRect(); mx = (e.clientX - r.left) / r.width; my = 1 - (e.clientY - r.top) / r.height; });
-  let raf = 0; function loop(now) { cancelAnimationFrame(raf); if (!vis) return; size(); gl.uniform1f(U('t'), t0 + (now || 0) / 1000); gl.uniform2f(U('m'), mx, my); gl.drawArrays(gl.TRIANGLES, 0, 3); if (!reduce) raf = requestAnimationFrame(loop); }
-  addEventListener('resize', size);
+  let lastRip = 0;
+  function loop(now) {
+    cancelAnimationFrame(raf); if (!vis) return; size(); now = now || performance.now(); const t = t0 + now / 1000;
+    // when nobody is pointing (phones, idle), a slow ghost pointer keeps the field alive
+    if (now - P.last > 2600) { P.tx = W * (.5 + .34 * Math.sin(t * .23)); P.ty = H * (.46 + .28 * Math.sin(t * .31 + 1.3)); if (!P.on) { P.x = P.tx; P.y = P.ty; P.on = true; } }
+    const vx = P.tx - P.x, vy = P.ty - P.y; P.x += vx * .12; P.y += vy * .12;
+    if (Math.hypot(vx, vy) > 46 && now - lastRip > 260) { rip.push({ x: P.x, y: P.y, t: now, k: .55 }); lastRip = now; if (rip.length > 6) rip.shift(); }
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+    const R = big ? Math.min(250, W * .34) : 170, R2 = R * R, ox = (W % gap) / 2, oy = (H % gap) / 2;
+    for (let y = oy; y < H; y += gap) for (let x = ox; x < W; x += gap) {
+      const wave = .5 + .5 * Math.sin(x * .011 + y * .017 - t * .7) * Math.sin(y * .009 - x * .004 + t * .41);
+      let px = x, py = y, r = .85 + wave * .55, al = tone[1] * (.45 + wave * .75), hot = 0;
+      const dx = x - P.x, dy = y - P.y, d2 = dx * dx + dy * dy;
+      if (d2 < R2) { const d = Math.sqrt(d2) || 1, f = 1 - d / R, e = f * f * (3 - 2 * f); hot = e; px += dx / d * e * 13; py += dy / d * e * 13; r += e * 3.4; al += e * .62; }
+      for (const q of rip) { const age = (now - q.t) / 1000, rad = age * 330, d = Math.hypot(x - q.x, y - q.y), band = Math.exp(-((d - rad) * (d - rad)) / 900) * Math.max(0, 1 - age / 1.5) * q.k; if (band > .02) { r += band * 2.6; al += band * .5; hot = Math.max(hot, band); } }
+      cx.fillStyle = 'rgba(' + (hot > .25 ? tone[2] : tone[0]) + ',' + Math.min(al, .95).toFixed(3) + ')';
+      if (r < 1.3) cx.fillRect(px - r, py - r, r * 2, r * 2); else { cx.beginPath(); cx.arc(px, py, r, 0, 6.2832); cx.fill(); }
+    }
+    while (rip.length && now - rip[0].t > 1600) rip.shift();
+    if (!reduce) raf = requestAnimationFrame(loop);
+  }
+  addEventListener('resize', () => { size(); if (reduce) loop(); });
 });
 
 /* ---------- fx: energy animation over the skin render ---------- */

@@ -139,3 +139,10 @@ em{font-style:italic}.serif-en em{font-style:italic;font-weight:400}
 .split .cols.n2:has(.stat),.statrow{align-items:baseline}
 
 .cols:has(>.col:empty){display:block}.col:empty,.it:empty,.stack:empty{display:none}
+
+canvas.silk{background:transparent}.hero .silk,.band>.silk{z-index:-1;opacity:1}.heroglow{z-index:-2}.foot .silk{opacity:.8}
+canvas.silk[data-tone="light"]{background:linear-gradient(135deg,#f3e2d6,#e7cdbd 55%,#f7ece4)}
+
+.langs{display:flex;gap:6px}.langs .langsw{padding:9px 11px;letter-spacing:.1em}@media (max-width:520px){.langs{gap:4px}.langs .langsw{padding:8px 8px;font-size:11px;letter-spacing:.04em}.logo b{font-size:19px}.logo span{display:none}}
+body.l-zh{--serif:"Cormorant Garamond","Noto Serif SC","Songti SC",serif;--kserif:"Noto Serif SC","Songti SC","Cormorant Garamond",serif;--sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+body.l-zh .eyebrow{letter-spacing:.18em}body.l-zh .quote,body.l-zh .voice,body.l-zh em{font-style:normal}
